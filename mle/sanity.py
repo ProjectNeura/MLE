@@ -1,7 +1,7 @@
 from typing import Any, Callable
 
 import torch
-from erbium.api import get_all_gpu_info
+from erbium.api import get_all_cpu_info, get_all_gpu_info
 from pynvml import NVMLError
 from rich.console import Console
 from rich.table import Table
@@ -12,15 +12,28 @@ from mle.vars import ExpConfig
 
 def check_environment(config: ExpConfig, *, fn_cd: Callable[[ExpConfig], str] = check_dataset,
                       fn_cpd: Callable[[ExpConfig], str] = check_preprocessed_dataset) -> dict[str, Any]:
+    cpus = get_all_cpu_info()
     try:
         gpus = get_all_gpu_info()
     except NVMLError:
         gpus = {}
-    return {"dataset": fn_cd(config), "preprocessed_dataset": fn_cpd(config), "gpus": gpus,
+    return {"dataset": fn_cd(config), "preprocessed_dataset": fn_cpd(config), "cpus": cpus, "gpus": gpus,
             "cuda": torch.version.cuda}
 
 
 def print_environment_check_results(results: dict[str, Any], *, console: Console = Console()) -> None:
+    table = Table(title="Available CPUs")
+    table.add_column("Name (ID)", justify="left")
+    table.add_column("Cores", justify="center")
+    table.add_column("Total Memory (GB)", justify="center")
+    table.add_column("Utilization (%)", justify="center")
+    table.add_column("Memory Utilization (%)", justify="center")
+    for info in results["cpus"].values():
+        table.add_row(
+            f"{info.name} ({info.device_id})", f"{info.physical_cores} / {info.logical_cores}",
+            f"{info.total_memory_gb:.1f}", f"{info.utilization_percent:.2f}", f"{info.memory_utilization_percent:.2f}"
+        )
+    console.print(table)
     table = Table(title="Available GPUs")
     table.add_column("Name (ID)", justify="left")
     table.add_column("Total Memory (GB)", justify="center", style="cyan")
